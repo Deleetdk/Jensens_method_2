@@ -1,7 +1,7 @@
 # libs --------------------------------------------------------------------
 
 library(pacman)
-p_load(stringr, shiny, shinyIncubator, plyr, lavaan, semPlot, qgraph, kirkegaard, rhandsontable)
+p_load(stringr, shiny, shinyIncubator, plyr, lavaan, semPlot, qgraph, kirkegaard, rhandsontable, ggplot2)
 
 
 # function ----------------------------------------------------------------
@@ -18,14 +18,6 @@ p_load(stringr, shiny, shinyIncubator, plyr, lavaan, semPlot, qgraph, kirkegaard
 
 # testing -----------------------------------------------------------------
 
-#converts a string og numbers to a numeric vector
-to_vector = function(x) {
-  library(stringr)
-  x = as.numeric(str_split(x, pattern = " ")[[1]])
-  return(x)
-}
-
-
 DF = data.frame(val = 1:10, bool = TRUE, big = LETTERS[1:10],
                 small = letters[1:10],
                 dt = seq(from = Sys.Date(), by = "days", length.out = 10),
@@ -37,10 +29,17 @@ DF_2 = rhandsontable(DF) %>%
 
 # simulate factor structure -----------------------------------------------
 
+#no cross loadings
 d = data.frame(g = c(.77, .81, .65, .75, .66, .65, .82, .45, .59),
                F1 = c(rep(.5, 3), rep(0, 6)),
                F2 = c(rep(0, 3), rep(.5, 3), rep(0, 3)),
                F3 = c(rep(0, 6), rep(.5, 3)))
+#cross loadings
+d = data.frame(g = c(.77, .81, .65, .75, .66, .65, .82, .45, .59),
+               F1 = c(.5, .4, .4, rep(0, 6)),
+               F2 = c(0, .2, 0, rep(.5, 3), rep(0, 3)),
+               F3 = c(0, 0, .2, rep(0, 3), rep(.5, 3)))
+
 
 d$s = apply(d, 1, function(x) {
   var_g_group = sum(x^2)
@@ -49,7 +48,7 @@ d$s = apply(d, 1, function(x) {
   return(loading_specificity)
 })
 rownames(d) = str_c("I", 1:9)
-
+d
 
 # Generate scores ---------------------------------------------------------
 
@@ -107,24 +106,8 @@ fit = sem(model, data = d_case, std.lv = T, orthogonal = T)
 summary(fit)
 coef(fit)
 
-#automatic lauyout
-# semPaths(fit, whatLabels = "std",  #what numbers to show
-#          residuals = F,            #dont show resids
-#          curve = 1.5,              #curve cor between latents
-#          fixedStyle = "white",     #make LV cor invis)
-# )
 
-m = matrix(nrow = 3, ncol = 9)
-m[1, ] = c(0, 11, 0, 0, 12, 0, 0, 13, 0)
-m[2, ] = 1:9
-m[3, ] = c(rep(0, 4), 10, rep(0, 4))
-
-semPaths(fit, whatLabels = "std",  #what numbers to show
-         residuals = F,            #dont show resids
-         curve = 1.5,              #curve cor between latents
-         fixedStyle = "white",     #make LV cor invis
-         layout = m                #manual layout
-)
+semPaths(fit, "model", "std", bifactor = "g", layout = "tree2", residuals = F, exoCov = F)
 
 
 # SEM hierarchical model --------------------------------------------------
@@ -143,16 +126,4 @@ fit = sem(model, data = d_case, std.lv = T, orthogonal = F)
 summary(fit, standardized = T)
 parameterEstimates(fit, standardized = T)
 
-#manual layout
-m = matrix(nrow = 3, ncol = 9)
-m[1, ] = c(rep(0, 4), 10, rep(0, 4))
-m[2, ] = c(0, 11, 0, 0, 12, 0, 0, 13, 0)
-m[3, ] = 1:9
-
-semPaths(fit, whatLabels = "std",  #what numbers to show
-         residuals = F,            #dont show resids
-         curve = 1.5,              #curve cor between latents
-         fixedStyle = "white",     #make LV cor invis
-         layout = m                #manual layout
-)
-
+semPaths(fit, "model", "std", layout = "tree2", residuals = F, exoCov = F)

@@ -9,6 +9,9 @@ library(shiny)
 library(devtools)
 library(rhandsontable)
 library(psych)
+library(stringr)
+library(lavaan)
+library(semPlot)
 
 
 # functions ----------------------------------------------------------------
@@ -34,9 +37,6 @@ num_gf = ncol(d) - 1 #subtract g
 colnames(d) = c("g", str_c("F", 1:num_gf))
 rownames(d) = str_c("I", 1:nrow(d))
 
-print("at startup")
-print(d)
-
 
 shinyServer(function(input, output) {
   
@@ -44,9 +44,7 @@ shinyServer(function(input, output) {
     #fetch updated
     if (!is.null(input$table)) {
       d = hot_to_r(input$table)
-      print("in reac_m()")
       d$s = NULL
-      print(d)
     }
 
     #calculate s
@@ -67,13 +65,14 @@ shinyServer(function(input, output) {
   
   reac_d_case = reactive({
     #update
-    input$update
     #this is to avoid spamming the server with generate data requests
+    input$update
+    
     
     #this code is only run when update is changed
     isolate({
       #settings
-      n = 1e3
+      n = 1e2
       set.seed(1)
       
       #fetch d
@@ -107,17 +106,22 @@ shinyServer(function(input, output) {
   })
   
   reac_d_indicators = reactive({
+    #fetch d
+    d = reac_d()
+    
+    #make indicator list
     d_indicators = list()
     d_indicators$g = str_c(rownames(d)[d$g > 0], collapse = " + ")
     
     #group_factors = grep("F", colnames(d), value = T) #grep method
-    group_factors = colnames(d)[str_detect(colnames(d), "F")]
+    group_factors <<- colnames(d)[str_detect(colnames(d), "F")]
     
     for (gf in group_factors) {
       #list with structure
       d_indicators[[gf]] = str_c(rownames(d)[d[gf] > 0], collapse = " + ")
     }
     
+    print(d_indicators)
     return(d_indicators)
   })
   
@@ -126,49 +130,70 @@ shinyServer(function(input, output) {
     #fetch table
     d = reac_d()
     d_case = reac_d_case()
-    
-    print("in output$table")
-    print(d)
-    print(describe(d_case))
-    
+
     #change to hs table
     d = rhandsontable(d) %>% 
-      hot_table(highlightCol = TRUE, highlightRow = TRUE,
-                allowRowEdit = FALSE, allowColEdit = FALSE)
+      hot_table(highlightCol = T, highlightRow = T,
+                allowRowEdit = T, allowColEdit = T)
     return(d)
   })
   
-  output$bi_factor = renderPlot({
-    #fetch data
-    d = reac_d()
-    d_case = reac_d_case()
-    d_indicators = reac_d_indicators()
+  output$SEM_bi = renderPlot({
+    #update
+    #this is to avoid spamming the server with generate data requests
+    input$update
     
-    #set up model
-    model = ""
-    for (LV_i in seq_along(d_indicators)) {
-      LV_name = names(d_indicators[LV_i])
-      model = model + LV_name + " =~ " + d_indicators[LV_i] + "\n"
-    }
+    isolate({
+      #fetch data
+      d = reac_d()
+      d_case = reac_d_case()
+      d_indicators = reac_d_indicators()
+      
+      #set up model
+      model = ""
+      for (LV_i in seq_along(d_indicators)) {
+        LV_name = names(d_indicators[LV_i])
+        model = model + LV_name + " =~ " + d_indicators[LV_i] + "\n"
+      }
+      
+      #fit
+      fit = sem(model, data = d_case, std.lv = T, orthogonal = T)
+      
+      #plot
+      semPaths(fit, "model", "std", bifactor = "g", layout = "tree2", residuals = F, exoCov = F)
+    })
     
-    #fit
-    fit = sem(model, data = d_case, std.lv = T, orthogonal = T)
-    
-    #custom layout
-    m = matrix(nrow = 3, ncol = 9)
-    m[1, ] = c(0, 11, 0, 0, 12, 0, 0, 13, 0)
-    m[2, ] = 1:9
-    m[3, ] = c(rep(0, 4), 10, rep(0, 4))
-    
-    #plot
-    semPaths(fit, whatLabels = "std",  #what numbers to show
-             residuals = F,            #dont show resids
-             curve = 1.5,              #curve cor between latents
-             fixedStyle = "white",     #make LV cor invis
-             layout = m                #manual layout
-    )
   })
   
-  
+  output$SEM_hier = renderPlot({
+    #update
+    #this is to avoid spamming the server with generate data requests
+    input$update
+    
+    isolate({
+      #fetch data
+      d = reac_d()
+      d_case = reac_d_case()
+      d_indicators = reac_d_indicators()
+      
+      #set up model
+      model = "g =~ " + str_c(group_factors, collapse = " + ") + "\n"
+      for (LV_i in seq_along(d_indicators)) {
+        #skip g factor
+        if (LV_i == 1) next
+        
+        #set loadings
+        LV_name = names(d_indicators[LV_i])
+        model = model + LV_name + " =~ " + d_indicators[LV_i] + "\n"
+      }
+      
+      #fit
+      fit = sem(model, data = d_case, std.lv = T, orthogonal = F)
+      
+      #plot
+      semPaths(fit, "model", "std", layout = "tree2", residuals = F, exoCov = F)
+    })
+    
+  })
   
 })

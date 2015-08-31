@@ -25,8 +25,11 @@ shinyUI(fluidPage(
     mainPanel(
       tabsetPanel(
         tabPanel(
-          "Bi-factor SEMplot",
-          plotOutput("bi_factor")
+          "Structural plots",
+          HTML("<p>Confirmatory factor analysis: bi-factor solution</p>"),
+          plotOutput("SEM_bi"),
+          HTML("<p>Confirmatory factor analysis: hierarchical solution</p>"),
+          plotOutput("SEM_hier")
         )
         
       )
