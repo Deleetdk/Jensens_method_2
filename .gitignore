@@ -44,3 +44,4 @@ Temporary Items
 
 #R temp files
 .Rproj.user
+*.Rhistory

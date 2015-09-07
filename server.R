@@ -5,14 +5,6 @@
 # http://shiny.rstudio.com
 #
 
-library(shiny)
-library(devtools)
-library(rhandsontable)
-library(psych)
-library(stringr)
-library(lavaan)
-library(semPlot)
-
 
 # functions ----------------------------------------------------------------
 #string concatenation function
@@ -27,7 +19,8 @@ library(semPlot)
 
 # settings ----------------------------------------------------------------
 
-#initial df
+##initial loadings
+#the initial setup of the loadings table
 d = data.frame(c(.77, .81, .65, .75, .66, .65, .82, .45, .59),
                c(rep(.5, 3), rep(0, 6)),
                c(rep(0, 3), rep(.5, 3), rep(0, 3)),
@@ -37,13 +30,15 @@ num_gf = ncol(d) - 1 #subtract g
 colnames(d) = c("g", str_c("F", 1:num_gf))
 rownames(d) = str_c("I", 1:nrow(d))
 
+##Initial differences
+d2 = data.frame(d = c(1, -.5, .5, 0, 0))
 
 shinyServer(function(input, output) {
   
   reac_d = reactive({
     #fetch updated
-    if (!is.null(input$table)) {
-      d = hot_to_r(input$table)
+    if (!is.null(input$loadings_table)) {
+      d = as.data.frame(hot_to_r(input$loadings_table)) #convert to df because the received is a chacracter matrix
       d$s = NULL
     }
 
@@ -126,13 +121,13 @@ shinyServer(function(input, output) {
   })
   
   #Table input
-  output$table = renderRHandsontable({
+  output$loadings_table = renderRHandsontable({
     #fetch table
     d = reac_d()
     d_case = reac_d_case()
 
     #change to hs table
-    d = rhandsontable(d) %>% 
+    d = rhandsontable(d, useTypes = F) %>% 
       hot_table(highlightCol = T, highlightRow = T,
                 allowRowEdit = T, allowColEdit = T)
     return(d)
@@ -196,4 +191,50 @@ shinyServer(function(input, output) {
     
   })
   
+  output$SEM_single = renderPlot({
+    #update
+    #this is to avoid spamming the server with generate data requests
+    input$update
+    
+    isolate({
+      #fetch data
+      d = reac_d()
+      d_case = reac_d_case()
+      d_indicators = reac_d_indicators()
+      
+      #set up model
+      model = "g =~ " + str_c(d_indicators, collapse = " + ")
+      
+      #fit
+      fit = sem(model, data = d_case, std.lv = T, orthogonal = F)
+      
+      #plot
+      semPaths(fit, "model", "std", layout = "tree2", residuals = F, exoCov = F)
+    })
+    
+  })
+  
+  
+  output$EFA_single = renderPlot({
+    #update
+    #this is to avoid spamming the server with generate data requests
+    input$update
+    
+    isolate({
+      #fetch data
+      d = reac_d()
+      d_case = reac_d_case()
+      d_indicators = reac_d_indicators()
+
+      #plot
+      qgraph.efa(d_case, factor = 1, corMat = F, residuals = F)
+#       fa = fa(d_case)
+#       plot(fa)
+      #semPaths(fit, "model", "std", layout = "tree2", residuals = F, exoCov = F)
+    })
+  })
+  
 })
+
+
+
