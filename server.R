@@ -129,7 +129,7 @@ shinyServer(function(input, output) {
     #change to hs table
     d = rhandsontable(d, useTypes = F) %>% 
       hot_table(highlightCol = T, highlightRow = T,
-                allowRowEdit = T, allowColEdit = T)
+                allowRowEdit = T)
     return(d)
   })
   
